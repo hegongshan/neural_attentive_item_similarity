@@ -1,0 +1,4 @@
+model_checkpoint_path: "ml-1m_FISM_1573647530.ckpt-54"
+all_model_checkpoint_paths: "ml-1m_FISM_1573647530.ckpt-54"
+all_model_checkpoint_timestamps: 1573818626.7351308
+last_preserved_timestamp: 1573647549.426528
