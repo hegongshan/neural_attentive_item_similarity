@@ -25,6 +25,8 @@ def parse_args():
                         help='Number of negative instances to pair with a positive instance.')
     parser.add_argument('--topN', type=int, default=10,
                         help='Size of recommendation list.')
+    parser.add_argument('--pretrain', type=int, default=1,
+                        help='whether pretraining or not, 1-pretrain, 0-without pretrain.')
 
     parser.add_argument('--embedding_size', type=int, default=16,
                         help='Embedding size.')
@@ -85,6 +87,8 @@ class NAIS(tf.Module):
                                 shape=(1, self.embedding_size),
                                 name='zero')
 
+        # self.bias = tf.Variable(tf.zeros(self.num_items, ), name='bias')
+
         # Attention Network Parameter
         if self.algorithm == 'concat':
             self.W = tf.Variable(NAIS.init_random(shape=(2 * self.embedding_size, self.attention_factor)),
@@ -101,21 +105,24 @@ class NAIS(tf.Module):
                              dtype=tf.float32,
                              name='h')
 
-    def train_step(self, user_input, item_input, labels, optimizer):
-        with tf.GradientTape() as tape:
-            predictions = self.predict(user_input, item_input)
-            total_loss = tf.keras.losses.binary_crossentropy(labels, predictions) \
-                         + self.p_reg * tf.reduce_sum(tf.square(self.P)) \
-                         + self.q_reg * tf.reduce_sum(tf.square(self.Q)) \
-                         + self.w_reg * tf.reduce_sum(tf.square(self.W)) \
-                         + self.b_reg * tf.reduce_sum(tf.square(self.b)) \
-                         + self.h_reg * tf.reduce_sum(tf.square(self.h))
+    def _attention(self, inputs, num_idx):
+        # (batch,n_u,attention_factor)
+        mlp_output = tf.nn.relu(tf.matmul(inputs, self.W) + self.b)
+        # (batch,n_u,1)
+        weight = tf.matmul(mlp_output, self.h)
+        # (batch,n_u)
+        weight = tf.reshape(weight, (weight.shape[0], weight.shape[1]))
 
-        gradients = tape.gradient(total_loss, self.trainable_variables)
-        optimizer.apply_gradients(zip(gradients, self.trainable_variables))
-        return total_loss
+        exp_a = tf.exp(weight)
+        mask_mat = tf.sequence_mask(num_idx, maxlen=inputs.shape[1], dtype=tf.float32)
+        exp_att = mask_mat * exp_a
 
-    def predict(self, user_input, item_input):
+        # (batch,1)
+        exp_sum = tf.reduce_sum(exp_att, axis=1, keepdims=True)
+        # (batch,n_u,1)
+        return tf.expand_dims(exp_att / tf.pow(exp_sum, self.beta), axis=2)
+
+    def predict(self, user_input, item_input, num_idx):
         q_with_mask = tf.concat([self.Q, self.zero], axis=0, name='q_with_mask')
         # (batch,n_u,embedding_size)
         user_embedding = tf.nn.embedding_lookup(q_with_mask, user_input)
@@ -132,20 +139,25 @@ class NAIS(tf.Module):
             # (batch,n_u,embedding_size)
             result = user_embedding * item_embedding
 
-        # (batch,n_u,attention_factor)
-        weight_input = tf.matmul(result, self.W) + self.b
+        # (batch,embedding_size)
+        item_embedding = tf.reduce_sum(item_embedding, axis=1)
         # (batch,n_u,1)
-        weight = tf.matmul(tf.nn.relu(weight_input), self.h)
-        # (batch,n_u)
-        weight = tf.reshape(weight, (weight.shape[0], weight.shape[1]))
+        a_ij = self._attention(result, num_idx)
 
-        # (batch,1)
-        coefficient = tf.expand_dims(tf.pow(tf.reduce_sum(tf.exp(weight), axis=1), -self.beta), 1)
-        # (batch,n_u,1)
-        a_ij = tf.expand_dims(coefficient * tf.exp(weight), axis=-1)
+        return tf.sigmoid(
+            tf.reduce_sum(item_embedding * tf.reduce_sum(a_ij * user_embedding, axis=1), axis=1))
 
-        y_ui = tf.reduce_sum(tf.reduce_sum(item_embedding * (a_ij * user_embedding), axis=-1), axis=-1)
-        return y_ui
+    def train(self, user_input, item_input, num_idx, labels, optimizer):
+        with tf.GradientTape() as tape:
+            predictions = self.predict(user_input, item_input, num_idx)
+            total_loss = tf.keras.losses.binary_crossentropy(labels, predictions) \
+                         + self.p_reg * tf.reduce_sum(tf.square(self.P)) \
+                         + self.q_reg * tf.reduce_sum(tf.square(self.Q)) \
+                         + self.w_reg * tf.reduce_sum(tf.square(self.W))
+
+        gradients = tape.gradient(total_loss, self.trainable_variables)
+        optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+        return total_loss
 
 
 def evaluate(model, dataset, topN):
@@ -154,7 +166,8 @@ def evaluate(model, dataset, topN):
         user_input, item_input, test_item, n_u = get_batch_test_data(batch_id=batch_id,
                                                                      dataset=dataset)
         predictions = model.predict(user_input=user_input,
-                                    item_input=item_input)
+                                    item_input=item_input,
+                                    num_idx=n_u)
         map_item_score = {}
         for i in range(len(item_input)):
             item = item_input[i]
@@ -176,19 +189,24 @@ if __name__ == '__main__':
     lr = args.lr
     print(args)
 
-    if not os.path.exists('pretrain/NAIS'):
-        os.makedirs('pretrain/NAIS')
+    # whether interrupted or not
+    start_epochs = 0
+
+    directory = os.path.join('pretrain', 'NAIS', args.data_set_name)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    # logging setting
+    log_dir = os.path.join('log', 'NAIS_%s.log' % args.data_set_name)
     if not os.path.exists('log'):
         os.mkdir('log')
-
     if logging.root.handlers:
         logging.root.handlers = []
     logging.basicConfig(format='%(asctime)s : %(levelname)s: %(message)s',
                         level=logging.INFO,
-                        filename='log/NAIS_%s.log' % args.data_set_name)
+                        filename=log_dir)
 
-    directory = 'pretrain/NAIS'
-    model_out_file = '%s_NAIS_%d.ckpt' % (args.data_set_name, time())
+    model_out_file = 'NAIS_%d.ckpt' % time()
 
     dataset = DataSet(path=args.path,
                       data_set_name=args.data_set_name)
@@ -198,14 +216,6 @@ if __name__ == '__main__':
     optimizer = tf.keras.optimizers.Adagrad(lr=lr,
                                             initial_accumulator_value=1e-8)
 
-    # fism = FISM(num_users=dataset.num_users,
-    #             num_items=dataset.num_items,
-    #             args=args)
-    # ckpt = tf.train.Checkpoint(model=fism)
-    # ckpt.restore(tf.train.latest_checkpoint('pretrain/FISM/ml-1m_FISM_1573647530.ckpt'))
-    # model.P = fism.P
-    # model.Q = fism.Q
-
     checkpoint = tf.train.Checkpoint(model=model,
                                      optimizer=optimizer)
     manager = tf.train.CheckpointManager(checkpoint,
@@ -213,16 +223,28 @@ if __name__ == '__main__':
                                          checkpoint_name=model_out_file,
                                          max_to_keep=1)
 
+    if start_epochs > 0:
+        checkpoint.restore(manager.latest_checkpoint)
+    elif args.pretrain:
+        fism = FISM(num_users=dataset.num_users,
+                    num_items=dataset.num_items,
+                    args=args)
+        ckpt = tf.train.Checkpoint(model=fism)
+        ckpt.restore(tf.train.latest_checkpoint('pretrain/FISM/ml-1m_FISM_1573647530.ckpt'))
+        model.P = fism.P
+        model.Q = fism.Q
+
     # Check Init performance
     start = time()
     hits, ndcgs = evaluate(model, dataset, topN)
     hr, ndcg = np.array(hits).mean(), np.array(ndcgs).mean()
     print('Init: HR = %.4f, NDCG = %.4f [%.1f s]' % (hr, ndcg, time() - start))
-    logging.info('Init: HR = %.4f, NDCG = %.4f [%.1f s]' % (hr, ndcg, time() - start))
+    if start_epochs == 0:
+        logging.info('Init: HR = %.4f, NDCG = %.4f [%.1f s]' % (hr, ndcg, time() - start))
 
     # train model
     best_hr, best_ndcg, best_iter = hr, ndcg, -1
-    for epoch in range(epochs):
+    for epoch in range(start_epochs, epochs):
         losses = []
 
         # train step
@@ -236,16 +258,17 @@ if __name__ == '__main__':
                                                                            train_data=train_data,
                                                                            train_list=dataset.trainList,
                                                                            num_items=dataset.num_items)
-            loss = model.train_step(user_input=user_input,
-                                    item_input=item_input,
-                                    labels=labels,
-                                    optimizer=optimizer)
+            loss = model.train(user_input=user_input,
+                               item_input=item_input,
+                               num_idx=num_idx,
+                               labels=labels,
+                               optimizer=optimizer)
             losses.append(loss)
             if args.verbose:
                 print('%d/%d loss=%.4f [%.1f s]' % (batch_id + 1, dataset.num_users, loss, time() - start_time))
 
-        end = time()
-        total_loss = np.array(losses).mean()
+            end = time()
+            total_loss = np.array(losses).mean()
 
         # evaluate step
         hits, ndcgs = evaluate(model, dataset, topN)

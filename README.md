@@ -5,7 +5,7 @@ If you use the codes for your paper as baseline implementation, please cite the 
 
 https://github.com/hegongshan/neural_attentive_item_similarity
 
-Official Implemenation (Python 2.7 + TensorFlow1.0): 
+Official Implemenation (Python 2.7 + TensorFlow 1.x): 
 https://github.com/AaronHeee/Neural-Attentive-Item-Similarity-Model
 
 ### Requirements
@@ -29,7 +29,7 @@ python FISM.py --path data --data_set_name ml-1m --epochs 100 --num_neg 4 --embe
 * NAIS
 
 ```
-python NAIS.py
+python NAIS.py --pretrain 1 --path data --data_set_name ml-1m --epochs 100 --num_neg 4 --embedding_size 16 --lr 0.01
 ```
 
 ### Experimental Results
@@ -50,5 +50,5 @@ coming soon...
 | :---: | :---: | :-----: |
 | ml-1m |       |         |
 
-**Last Updated**: November 15, 2019
+**Last Updated**: November 16, 2019
 

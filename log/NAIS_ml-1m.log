@@ -1,5 +1,5 @@
-2019-11-15 20:58:28,287 : INFO: Init: HR = 0.1051, NDCG = 0.0479 [150.9 s]
-2019-11-15 20:59:30,417 : WARNING: From /Library/Frameworks/Python.framework/Versions/3.7/lib/python3.7/site-packages/tensorflow_core/python/ops/array_grad.py:502: _EagerTensorBase.cpu (from tensorflow.python.framework.ops) is deprecated and will be removed in a future version.
+2019-11-16 21:16:11,959 : INFO: Init: HR = 0.1040, NDCG = 0.0478 [137.0 s]
+2019-11-16 21:17:18,323 : WARNING: From /Library/Frameworks/Python.framework/Versions/3.7/lib/python3.7/site-packages/tensorflow_core/python/ops/array_grad.py:502: _EagerTensorBase.cpu (from tensorflow.python.framework.ops) is deprecated and will be removed in a future version.
 Instructions for updating:
 Use tf.identity instead.
-2019-11-15 21:34:12,845 : INFO: Iteration 1 [2016.8 s]: HR = 0.4263, NDCG = 0.2472, loss = 1.4899 [127.7 s]
+2019-11-16 21:58:09,930 : INFO: Iteration 1 [2371.1 s]: HR = 0.4679, NDCG = 0.2603, loss = 0.3513 [146.8 s]

@@ -11,8 +11,6 @@ from dataset import DataSet
 from evaluate import get_hit_ratio, get_NDCG
 from batch import get_train_data, get_batch_train_data, get_batch_test_data
 
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-
 
 def parse_args():
     parser = ArgumentParser(description='Run FISM.')
@@ -51,7 +49,7 @@ class FISM(tf.Module):
         self.num_users = num_users
         self.num_items = num_items
         self.embedding_size = args.embedding_size
-        if hasattr(args,'alpha'):
+        if hasattr(args, 'alpha'):
             self.alpha = args.alpha
         else:
             self.alpha = 0
@@ -151,8 +149,13 @@ if __name__ == '__main__':
     lr = args.lr
     print(args)
 
-    if not os.path.exists('pretrain/FISM'):
-        os.makedirs('pretrain/FISM')
+    # whether interrupted or not
+    start_epochs = 0
+
+    directory = os.path.join('pretrain', 'FISM')
+    if not os.path.exists():
+        os.makedirs(directory)
+
     if not os.path.exists('log'):
         os.mkdir('log')
 
@@ -160,10 +163,9 @@ if __name__ == '__main__':
         logging.root.handlers = []
     logging.basicConfig(format='%(asctime)s : %(levelname)s: %(message)s',
                         level=logging.INFO,
-                        filename='log/FISM_%s.log' % args.data_set_name)
+                        filename=os.path.join('log', 'FISM_%s.log' % args.data_set_name))
 
-    directory = 'pretrain/FISM/'
-    model_out_file = 'ml-1m_FISM_1573647530.ckpt'  # %s_FISM_%d.ckpt' % (args.data_set_name, time())
+    model_out_file = '%s_FISM_%d.ckpt' % (args.data_set_name, time())
 
     dataset = DataSet(path=args.path,
                       data_set_name=args.data_set_name)
@@ -179,7 +181,8 @@ if __name__ == '__main__':
                                          directory=directory,
                                          checkpoint_name=model_out_file,
                                          max_to_keep=1)
-    # checkpoint.restore(manager.latest_checkpoint)
+    if start_epochs > 0:
+        checkpoint.restore(manager.latest_checkpoint)
 
     # Check Init performance
     start = time()
@@ -190,7 +193,7 @@ if __name__ == '__main__':
 
     # train model
     best_hr, best_ndcg, best_iter = hr, ndcg, -1
-    for epoch in range(epochs):
+    for epoch in range(start_epochs, epochs):
         losses = []
 
         # train step
