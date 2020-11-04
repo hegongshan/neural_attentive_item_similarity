@@ -14,7 +14,7 @@ ITEM_CLIP = 300
 class DataSet(object):
 
     def __init__(self, path, data_set_name):
-        file_path = path + os.path.sep + data_set_name
+        file_path = os.path.join(path, data_set_name)
         self.trainMatrix = self.load_rating_file_as_matrix(file_path + ".train.rating")
         self.trainList = self.load_training_file_as_list(file_path + ".train.rating")
         self.testRatings = self.load_rating_file_as_list(file_path + ".test.rating")
@@ -86,7 +86,8 @@ class DataSet(object):
                     arr = line.split("\t")
                     u, i = int(arr[0]), int(arr[1])
                     if u_ == u:
-                        items.append(i)
+                        if len(items) < ITEM_CLIP:
+                            items.append(i)
                     else:
                         lists.append(items)
                         items = []
@@ -99,6 +100,5 @@ class DataSet(object):
 if __name__ == '__main__':
     path = 'data'
     data_set = 'ml-1m'
-    num_negatives = 4
-    data = DataSet('%s/%s' % (path, data_set))
+    data = DataSet(path, data_set)
     print(data.trainList[0])

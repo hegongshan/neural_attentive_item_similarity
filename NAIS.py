@@ -267,8 +267,8 @@ if __name__ == '__main__':
             if args.verbose:
                 print('%d/%d loss=%.4f [%.1f s]' % (batch_id + 1, dataset.num_users, loss, time() - start_time))
 
-            end = time()
-            total_loss = np.array(losses).mean()
+        end = time()
+        total_loss = np.array(losses).mean()
 
         # evaluate step
         hits, ndcgs = evaluate(model, dataset, topN)
@@ -287,4 +287,4 @@ if __name__ == '__main__':
     logging.info("Best Iteration %d:  HR = %.4f, NDCG = %.4f. "
                  % (best_iter, best_hr, best_ndcg))
     if args.out > 0:
-        print("The best NAIS model is saved to %s" % model_out_file)
+        logging.info("The best NAIS model is saved to %s" % model_out_file)
