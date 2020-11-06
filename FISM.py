@@ -87,9 +87,7 @@ class FISM(tf.Module):
         #                                name='item_biases')
 
     def predict(self, user_input, item_input, user_id, n_u, training=True):
-
         embedding_p = tf.nn.embedding_lookup(self.P, item_input)
-
         q_with_mask = tf.concat([self.Q, self.zero], axis=0, name='q_with_mask')
         embedding_q = tf.reduce_sum(tf.nn.embedding_lookup(q_with_mask, user_input), 1)
 
@@ -153,7 +151,7 @@ if __name__ == '__main__':
     start_epochs = 0
 
     directory = os.path.join('pretrain', 'FISM')
-    if not os.path.exists():
+    if not os.path.exists(directory):
         os.makedirs(directory)
 
     if not os.path.exists('log'):
@@ -175,14 +173,14 @@ if __name__ == '__main__':
     optimizer = tf.keras.optimizers.Adagrad(lr=lr,
                                             initial_accumulator_value=1e-8)
 
-    checkpoint = tf.train.Checkpoint(model=model,
-                                     optimizer=optimizer)
+    checkpoint = tf.train.Checkpoint(P=model.P,
+                                     Q=model.Q)
     manager = tf.train.CheckpointManager(checkpoint,
                                          directory=directory,
                                          checkpoint_name=model_out_file,
                                          max_to_keep=1)
     if start_epochs > 0:
-        checkpoint.restore(manager.latest_checkpoint)
+        checkpoint.restore(manager.latest_checkpoint).assert_consumed()
 
     # Check Init performance
     start = time()
